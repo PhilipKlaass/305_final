@@ -221,16 +221,17 @@ def dispersion_relation_graph(E_hist, lamD,w_pe,NG,dt,ud,w_pc,w_ph,lam_H,lam_C):
     x_min, x_max = ax.get_xlim()
     y_min, y_max = ax.get_ylim()
     
-    k0 = np.linspace(x_min,10*x_max,1000)
-    EA = np.sqrt(w_pc**2*(1+3*(k0*lam_C)**2)/(1+1/((k0*lam_C)**2)))
-    EP = np.sqrt(w_pc**2*(1+3*(k0*lam_C)**2)+w_ph**2*(1+3*(k0*lam_C)**2))
+    #theoretical dispersion relations
+    k0 = np.linspace(x_min,10*x_max,1000) #beam-driven
+    EA = np.sqrt(w_pc**2*(1+3*(k0*lam_C)**2)/(1+(k0*lam_H)**-2)) #electron acoustic
+    EP = np.sqrt(w_pc**2*(1+3*(k0*lam_C)**2)+w_ph**2*(1+3*(k0*lam_H)**2)) #electron plasma
     
-    mask = EA > y_max
+    ax.plot(k0/2,ud*k0,'k',lw =0.75)
+    ax.plot(k0/10,EA,'k',lw =0.75)
+    ax.plot(k0/10,EP,'k',lw =0.75)
     
-    
-    ax.plot(k0/10,ud*k0/10,'k')
-    ax.plot(k0/10,EA,'k')
-    ax.plot(k0/10,EP,'k')
+    plt.xlim(x_min,x_max)
+    plt.ylim(y_min,y_max)
     
     plt.show()
     
