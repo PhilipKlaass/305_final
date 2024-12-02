@@ -7,9 +7,10 @@ Created on Sat Nov 16 14:25:36 2024
 import matplotlib.pyplot as plt
 import numpy as np
 import scipy as sp
+from time import time
 
 
-def PIC1(L,dt,NT,NG,IW,EPSI,A1,A2,IPHI,SP1,SP2,SP3):
+def PIC1():
     '''
     1-D electrostatic particle in cell simulation of an unmagnetized plasma 
     based on the ES1 program described in Bridsall and Langdon (2004). Created 
@@ -38,30 +39,214 @@ def PIC1(L,dt,NT,NG,IW,EPSI,A1,A2,IPHI,SP1,SP2,SP3):
             2. first order (CIC), mom-conserving
             3. first order for particles and zeor'th order for forces,
                energy-conserving
-    EPSI : float
-        1/epsilon_0
-    A1 : float
-        Compensation factor
-    A2 : float
-        Smoothing Factor
-    IPHI : flaot
-        Plotting frequencies
-    SP1,SP2,SP3: 14-tuple
-        Parameters for each species
-            1. Number of particles
-            2. Plasma frequency
-            3. Cyclotron frequency
-            4. q/m
-            5. VT1 Gaussian velocity distrobution wuth VT1 being thermal speed
-               and 6*VT1 being the maximum velocity
     '''
+    NT = 150000 #Time steps
     
-    #
-    T_c = 1
+    Th_Tc = 100 #ratio of hot to cold electron temps
+    Th_Tb = 100 #ratio of hot to beam electron temps
+    nb_nc = 0.04 #ratio of beam to cold electron densities
+    ud_vC = 20.0 #ratio of streaming speed to cold thermal speed
+    
+    #Constants
+    m_e = 1.0
+    e = -1.0
+    k_B = 1.0
+    E0 = 1.0 #vaccuum permititvity
+    
+    N_c = int(5*10**3) #Number of cold electrons
+    N_h = N_c #Number of hot electrons 
+    N_b = int(nb_nc*N_c) #Number of beam electrons
+    
+    TC = 1.0 #cold electron temperature (velocities normallized to cold electron thermal speed)
+    TH = Th_Tc*TC 
+    TB = TH / ( Th_Tb )
+    
+    vC = np.sqrt(k_B*TC / m_e)
+    vH = np.sqrt(k_B*TH / m_e)
+    vB = np.sqrt(k_B*TB / m_e)
+    
+    ud = ud_vC*vC
+
+    n_c0 = (N_c*e)**2 / (1024**2 * E0 * k_B * TC) 
+    
+    lamD = np.sqrt(E0*k_B*TC/(n_c0*e**2))
+    
+    L = 1024*lamD
+    
+    n_c = N_c / L
+    lam_C =  np.sqrt(E0*k_B*TC/(n_c*e**2))
+    
+    n_h = N_h / L
+    lam_H =  np.sqrt(E0*k_B*TC/(n_h*e**2))
+    
+    
+    n_0 = (N_c+N_h+N_b) / L
+    
+    w_pe = np.sqrt(n_0 *e**2 / (m_e*E0) )
+    
+    w_pc = np.sqrt(n_c *e**2 / (m_e*E0))
+    w_ph = np.sqrt(n_h *e**2 / (m_e*E0))
+    
+    dt = 0.1*w_pe**-1
+    
+    NG = 1024
+    
+    xc,vc = init(n=N_c,L=L, vt1=vC , nv2=1, v0=0)
+    xh,vh = init(n=N_h,L=L, vt1=vH , nv2=1, v0=0)
+    xb,vb = init(n=N_b,L=L, vt1=vB , nv2=1, v0=ud)
+    
+    x = np.append(xc,np.append(xh, xb))
+    v = np.append(vc,np.append(vh, vb))
+    
+    K_E = np.array([])
+    P_E = np.array([])
+    time = np.array([])
+    E_hist = np.zeros((1024,1024),dtype = float)
+    
+    for i in range(NT):
+        
+        rho = calc_rho(x=x, q=e,L=L, NG=NG, IW="EC")
+        
+        phi_grid,E_grid,ECE = calc_fields(rho=rho, NG=NG, dx=lamD, EPSI=1/E0,
+                                          a1=0.5,a2=100,method = 'FFT')
+        
+        if i==0:
+            v,KE = accel(x=x, v=v,q=-e,m=m_e, E_grid=E_grid, IW="EC", NG=NG, L=L, dt=dt)
+        else:
+            v,KE = accel(x=x, v=v,q=e,m=m_e, E_grid=E_grid, IW="EC", NG=NG, L=L, dt=dt)
+        
+        x = move(x=x, v=v, L=L, dt=dt)
+        
+        P_E = np.append(P_E,ECE)
+        K_E = np.append(K_E,KE)
+        
+        time = np.append(time, i*dt*w_pe)
+        
+        if i%100 ==0:
+            plt.scatter(x[0:N_c]/lamD,v[0:N_c],s= 0.01,color ='k')
+            plt.xlabel(r"$x$")
+            plt.ylabel(r"$v_x$")
+            plt.title(str(i))
+            plt.show()
+            plt.scatter(x[N_c:N_c+N_h]/lamD,v[N_c:N_c+N_h],s= 0.01,color = 'r')
+            plt.title(str(i))
+            plt.xlabel(r"$x$")
+            plt.ylabel(r"$v_x$")
+            plt.show()
+            plt.scatter(x[N_c+N_h:]/lamD,v[N_c+N_h:],s= 0.01,color = 'b')
+            plt.title(str(i))
+            plt.xlabel(r"$x$")
+            plt.ylabel(r"$v_x$")
+            plt.show()
+            plt.plot(E_grid*np.abs(e/(m_e*w_pe*vC)),color = 'k')
+            plt.title(str(i))
+            plt.xlabel(r"$x$")
+            plt.ylabel(r"$E_x$")
+            plt.show()
+            plt.plot(time,-1*P_E*e/(k_B*TC*E0),color = 'k')
+            plt.xlabel(r"$\omega_{pe}t$")
+            plt.ylabel(r"Electrostatic Energy")
+            plt.title(str(i))
+            plt.show()
+            plt.plot(time,K_E,color = 'k')
+            plt.xlabel(r"$\omega_{pe}t$")
+            plt.ylabel(r"Kinetic Energy")
+            plt.title(str(i))
+            plt.show()
+            
+        if i%1 ==0:
+            if i<1024:
+                k = int(i/1)
+                E_hist[:,k%1024] = E_grid
+                
+            else:
+                
+                E_hist = np.roll(E_hist,1,axis = 0)
+                E_hist[:,-1] = E_grid
+        
+            if i%100 ==0 and i != 0 and i>1000:
+                dispersion_relation_graph(E_hist=E_hist, lamD=lamD, w_pe=w_pe,
+                                      NG=NG, dt= 0.01*w_pe,ud=ud_vC,w_pc=w_pc,
+                                      w_ph=w_ph,lam_H=lam_H,lam_C=lam_C)
+                
+            if i%100 ==0 and i != 0 and i>1000:
+                
+                fig,ax=plt.subplots()
+                pos=ax.imshow(E_hist[:,:k],cmap = 'jet')
+                cbar=fig.colorbar(pos,ax=ax)
+                plt.show()
+        
+            
+    dispersion_relation_graph(E_hist = E_hist, lamD=lamD, w_pe=w_pe,
+                              NG=NG,  dt= 0.01*w_pe)
+    plt.plot(P_E)
+    plt.show()
+    plt.plot(K_E)
+    plt.show()
+        
+    
+    
+def dispersion_relation_graph(E_hist, lamD,w_pe,NG,dt,ud,w_pc,w_ph,lam_H,lam_C):
+    
+    k = 2*np.pi*np.fft.rfftfreq(NG,lamD)
+    Dk = k[-1]-k[0]
+    
+    w = 2*np.pi*np.fft.rfftfreq(NG,dt)
+    Dw = w[-1]-w[0]
+    
+    grid_kt = np.fft.rfft(E_hist,axis = 0,norm= 'forward')
+    
+    grid_wk = np.fft.rfft2(E_hist,norm = 'forward')
+    grid_wk = np.abs(grid_wk)
     
     
     
-def init(n,L,wp,qm,vt1,nv2,v0):
+    grid_wk = grid_wk[:len(k),:]
+    
+    grid_wk=grid_wk.T # So that the horizontal axis is k and the vertical axis is omega
+    grid_wk=grid_wk[::-1,:] # So that (k = 0, omega = 0) is at bottom left corner
+    grid_wk=grid_wk[:,1:-1] # first and last col are zero
+    
+    grid_wk = grid_wk[int(round(.425*NG)):,:int(round(.075*NG))]
+    
+    M = np.max(grid_wk)
+    
+    m = int(round(len(k)*0.15))
+    
+    fig,ax=plt.subplots()
+    pos=ax.imshow(grid_wk/M,extent=(k[1],k[m],w[0],w[-m]),aspect='auto',
+                  cmap='jet')
+    cbar=fig.colorbar(pos,ax=ax)
+    
+    x_min, x_max = ax.get_xlim()
+    y_min, y_max = ax.get_ylim()
+    
+    k0 = np.linspace(x_min,10*x_max,1000)
+    EA = np.sqrt(w_pc**2*(1+3*(k0*lam_C)**2)/(1+1/((k0*lam_C)**2)))
+    EP = np.sqrt(w_pc**2*(1+3*(k0*lam_C)**2)+w_ph**2*(1+3*(k0*lam_C)**2))
+    
+    mask = EA > y_max
+    
+    
+    ax.plot(k0/10,ud*k0/10,'k')
+    ax.plot(k0/10,EA,'k')
+    ax.plot(k0/10,EP,'k')
+    
+    plt.show()
+    
+    #fig,ax=plt.subplots()
+    
+    #pos=ax.imshow(grid_wk,extent=(k[1],k[-2],w[0],w[-1]),aspect='auto')
+    #cbar=fig.colorbar(pos,ax=ax)
+    
+    #plt.show()
+
+    
+    
+    
+    
+    
+def init(n,L,vt1,nv2,v0):
     '''
     Places particles of one spieces in x,v phase space.
 
@@ -69,10 +254,6 @@ def init(n,L,wp,qm,vt1,nv2,v0):
     ----------
     n : integer
         Number of particles
-    wp : float
-        Plasma frequency
-    qm : float
-        Charge-mass ratio
     vt1 : float
         RMS thermal velocity for random velocities
     nv2 : float
@@ -80,10 +261,6 @@ def init(n,L,wp,qm,vt1,nv2,v0):
     v0 : TYPE
         Drift velocity
     '''
-    
-    q = np.zeros(n)+L*wp*wp/(n*qm)
-    
-    m = np.zeros(n) + q /qm
     
     #evenly spaced positions for a constant rho
     x = np.linspace(0.0, L, n, endpoint = False)
@@ -94,7 +271,7 @@ def init(n,L,wp,qm,vt1,nv2,v0):
     #apply maxwellian ditribution
     v = v+ np.random.normal(0,vt1,size = n)
     
-    return x,v,q,m
+    return x,v
 
 
 def calc_rho(x,q,L,NG,IW):
@@ -105,8 +282,6 @@ def calc_rho(x,q,L,NG,IW):
     ----------
     x : numpy array
         Stores position of each particle
-    q : numpy array
-        Stores charge of each particle
     L : integer
         Length of system
     l : float
@@ -138,20 +313,20 @@ def calc_rho(x,q,L,NG,IW):
             
             if np.abs(x[i]%dx)<0.5 * dx:
                 
-                rho[x_0 % NG] += q[i] / dx
+                rho[x_0 % NG] += q / dx
                 
             else:
-                rho[(x_0-+1) % NG] += q[i] / dx
+                rho[(x_0+1) % NG] += q / dx
                 
         if IW == 'CIC' or IW == 'EC':
-            rho[x_0 % NG] += q[i]/dx * (dx - x[i] % dx) / dx
-            rho[(x_0+1) % NG] += q[i]/dx * (x[i] % dx) / dx
+            rho[x_0 % NG] += q/dx * (dx - x[i] % dx) / dx
+            rho[(x_0+1) % NG] += q/dx * (x[i] % dx) / dx
     
-    rho +=  (1.6*10**-19)*L/NG
+    rho +=  -(n*q)/L
     
     return rho
 
-def calc_fields(rho,NG,dx,EPSI):
+def calc_fields(rho,NG,dx,EPSI,a1,a2,method):
     '''
     Calculates the potential and electric fields at the grid points.
     Uses a fourier transform method, peridoic boundary conditions assumed 
@@ -179,32 +354,61 @@ def calc_fields(rho,NG,dx,EPSI):
 
     '''
     
-    #FFT of charge density
-    rho_k = sp.fft.rfft(rho)
+    if method == "FFT":
+        #FFT of charge density
+        rho_k = sp.fft.rfft(rho)
+        
+        #make frequencies
+        k = 2*np.pi*sp.fft.rfftfreq(NG,dx)
+        
+        k[0]=1.     # to avoid division by 0
+        rho_k[0]=0
+        
+        #Smoothing
+        SM = np.exp(a1*np.sin(k*dx/2)**2 - a2*np.tan(k*dx/2)**4)
+        SM = SM**2
+        #N=8
+        #kM = np.max(k)
+        #SM = np.exp(-(k/kM)**N)
+        
+        rho_k = rho_k*SM
+        #ensure no division by zero and set dc signal to rho = 0
+        k[0],rho_k[0] = 1,0 
+        
+        K = k*(np.sin(0.5*k*dx)/ (0.5*k*dx))
     
-    #make frequencies
-    k = 2*np.pi*np.fft.rfftfreq(NG,dx)
+        phi_k = rho_k *EPSI / K**2
     
-    #ensure no division by zero and set dc signal to rho = 0
-    k[0],rho_k[0] = 1,0 
+        phi_grid = sp.fft.irfft(phi_k)
     
-    K = k*(np.sin(0.5*k*dx)/ (0.5*k*dx))
-
-    phi_k = rho_k *EPSI / K**2
-
-    phi_grid = np.fft.irfft(phi_k)
-
-    grad = (np.diag(np.ones(NG-1),1) - np.diag(np.ones(NG-1),-1))
-    
-    #Periodic boundary consitions
-    grad[0,NG-1] = -1
-    grad[NG-1,0] = 1
-    
-    grad = grad/(2*dx)
-    
-    E_grid = -1* grad@phi_grid
-    
-    ECE = 0.5*np.sum(phi_k*np.conjugate(rho_k))
+        grad = (np.diag(np.ones(NG-1),1) - np.diag(np.ones(NG-1),-1))
+        
+        #Periodic boundary consitions
+        grad[0,NG-1] = -1
+        grad[NG-1,0] = 1
+        
+        grad = grad/(2*dx)
+        
+        E_grid = -1* grad@phi_grid
+        
+        
+        
+    if method == "DPE":
+            
+        lap = 2*np.diag(np.ones(NG)) - np.diag(np.ones(NG-1),1)-np.diag(np.ones(NG-1),-1)
+        
+        lap[0,-1] = -1
+        lap[-1,0] = -1
+        
+        lap =lap/dx**2
+        
+        phi_grid = np.linalg.solve(lap,rho)
+        
+        grad = (np.diag(np.ones(NG-1),1) - np.diag(np.ones(NG-1),-1))/dx
+        
+        E_grid =-1*grad@phi_grid
+        
+    ECE = 0.5*dx*np.sum(phi_grid*rho)
     
     return phi_grid,E_grid, ECE
     
@@ -259,12 +463,12 @@ def accel(x,v,q,m,E_grid,IW,NG,L,dt):
     v_old=v
     v= v+(q/m)*dt*E_par
     
-    KE = np.sum(0.5*m*v*v_old)
+    KE = 0.5*m*np.sum(v*v_old)
     
     return v, KE
 
 
-def move(m,q,x,v,L,dt):
+def move(x,v,L,dt):
     
     x = x+v*dt
     x = x%L
@@ -276,16 +480,46 @@ def move(m,q,x,v,L,dt):
 def main_test():
     NG = 1024
     
-    L = 1024
-    dt = 10**-6
+    L = 1.024*10**-2
+    dt = 10**-1
     
-    x,v,q,m = init(n=1000, L = L, wp = 1.6*10**5, qm =-1.758*10**14, vt1 =10, nv2 =0, v0 = 0)
+    x1,v1 = init(n=10000, L = L, vt1 =.1, nv2 =0, v0 = 0)
     
-    for i in range(10000):
-        rho = calc_rho(x, q, L =L,NG = NG, IW = 'EC')
+    x2,v2 = init(n=10000, L = L, vt1 =1.0, nv2 =0, v0 = 0)
+    
+    x3,v3 = init(n=500, L = L, vt1 =.1, nv2 =0, v0 = 2.0)
+    
+    N = 25000
+    
+    L = np.sqrt(N)
+    
+    x = np.append(x1, x2)
+    v = np.append(v1, v2)
+    
+    x = np.append(x, x3)
+    v = np.append(v, v3)
+    
+    q=1
+    m=1
+    T = []
+    E = []
+    
+    t_density = 0
+    t_field =0
+    t_vel =0
+    t_pos = 0    
+    
+    for i in range(1000):
         
-        phi_grid,E_grid,ECE = calc_fields(rho = rho, NG= NG, dx= 1.0, EPSI = 1)
+        t1 = time()
         
+        rho = calc_rho(x, L =L,NG = NG, IW = 'EC')
+        
+        t2 = time()
+        
+        phi_grid,E_grid,ECE = calc_fields(rho = rho,NG= NG,dx= 1.0,EPSI = 1)
+        
+        t3 = time()
         if i ==0:
             
             #Set initial v to t=-dt/2 for the leapfrog scheme
@@ -293,13 +527,36 @@ def main_test():
             
         else:
             v,KE = accel(x, v, q, m, E_grid, IW = 'EC', NG=NG, L=L, dt=dt)
-        
+        t4 = time()
         x = move(m=m, q=q, x=x, v=v, L=L, dt=dt)
-        
-        if i%1000 ==0:
-            plt.scatter(x,v,marker = '.')
+        t5 = time()
+        if i%100 ==0:
+            plt.scatter(x[0:10000],v[0:10000],color ='b',marker = '.', alpha = 0.3,s=1)
+            plt.scatter(x[10000:20000],v[10000:20000],color ='r',marker = '.', alpha = 0.3,s=1)
+            plt.scatter(x[20000:],v[20000:],color ='g',marker = '.', alpha = 0.3,s=1)
             plt.title(str(i))
+            plt.xlabel('Position')
+            plt.ylabel('Velocity')
             plt.show()
+            
+        if i % 1000==0:
+            plt.plot(E_grid, 'k')
+            plt.plot(rho, 'b')
+            plt.show()
+            
+        t_density += t2-t1
+        t_field +=t3-t2
+        t_vel +=t4-t3
+        t_pos += t5-t4
+        T.append(KE)
+        E.append(E)
+    
+    print(t_density)
+    print(t_field)
+    print(t_vel)
+    print(t_pos)
+    plt.plot(T,color = 'k')
+
 
     
-main_test()
+PIC1()
