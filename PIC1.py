@@ -53,7 +53,7 @@ def PIC1():
     k_B = 1.0
     E0 = 1.0 #vaccuum permititvity
     
-    N_c = int(5*10**3) #Number of cold electrons
+    N_c = int(1*10**3) #Number of cold electrons
     N_h = N_c #Number of hot electrons 
     N_b = int(nb_nc*N_c) #Number of beam electrons
     
@@ -166,7 +166,7 @@ def PIC1():
         
             if i%100 ==0 and i != 0 and i>1000:
                 dispersion_relation_graph(E_hist=E_hist, lamD=lamD, w_pe=w_pe,
-                                      NG=NG, dt= 0.01*w_pe,ud=ud_vC,w_pc=w_pc,
+                                      dt=dt,ud=ud_vC,w_pc=w_pc,
                                       w_ph=w_ph,lam_H=lam_H,lam_C=lam_C)
                 
             if i%100 ==0 and i != 0 and i>1000:
@@ -186,12 +186,14 @@ def PIC1():
         
     
     
-def dispersion_relation_graph(E_hist, lamD,w_pe,NG,dt,ud,w_pc,w_ph,lam_H,lam_C):
+def dispersion_relation_graph(E_hist, lamD,w_pe,dt,ud,w_pc,w_ph,lam_H,lam_C):
     
-    k = 2*np.pi*np.fft.rfftfreq(NG,lamD)
+    NG,NT = E_hist.shape
+    
+    k = 2*np.pi*np.fft.rfftfreq(NG,lamD) /lamD
     Dk = k[-1]-k[0]
     
-    w = 2*np.pi*np.fft.rfftfreq(NG,dt)
+    w = np.pi*np.fft.rfftfreq(NT,dt)*w_pe
     Dw = w[-1]-w[0]
     
     grid_kt = np.fft.rfft(E_hist,axis = 0,norm= 'forward')
@@ -207,31 +209,35 @@ def dispersion_relation_graph(E_hist, lamD,w_pe,NG,dt,ud,w_pc,w_ph,lam_H,lam_C):
     grid_wk=grid_wk[::-1,:] # So that (k = 0, omega = 0) is at bottom left corner
     grid_wk=grid_wk[:,1:-1] # first and last col are zero
     
-    grid_wk = grid_wk[int(round(.425*NG)):,:int(round(.075*NG))]
+    #grid_wk = grid_wk[int(round(.425*NG)):,:int(round(.075*NG))]
     
     M = np.max(grid_wk)
     
     m = int(round(len(k)*0.15))
     
     fig,ax=plt.subplots()
-    pos=ax.imshow(grid_wk/M,extent=(k[1],k[m],w[0],w[-m]),aspect='auto',
-                  cmap='jet')
+    pos=ax.imshow(grid_wk/M,extent=(k[0],k[-1],w[0],w[-1]),
+                  aspect='auto', cmap='jet')
     cbar=fig.colorbar(pos,ax=ax)
     
     x_min, x_max = ax.get_xlim()
     y_min, y_max = ax.get_ylim()
     
     #theoretical dispersion relations
-    k0 = np.linspace(x_min,10*x_max,1000) #beam-driven
-    EA = np.sqrt(w_pc**2*(1+3*(k0*lam_C)**2)/(1+(k0*lam_H)**-2)) #electron acoustic
-    EP = np.sqrt(w_pc**2*(1+3*(k0*lam_C)**2)+w_ph**2*(1+3*(k0*lam_H)**2)) #electron plasma
+    k = k*lamD
+    BD = ud * k #beam-driven
+    EA = np.sqrt(w_pc**2*(1+3*(k*lam_C)**2)/(1+(k*lam_H)**-2)) #electron acoustic
+    EP = np.sqrt(w_pc**2*(1+3*(k*lam_C)**2)+w_ph**2*(1+3*(k*lam_H)**2)) #electron plasma
     
-    ax.plot(k0/2,ud*k0,'k',lw =0.75)
-    ax.plot(k0/10,EA,'k',lw =0.75)
-    ax.plot(k0/10,EP,'k',lw =0.75)
+    ax.plot(k,BD,'k',lw =0.75)
+    ax.plot(k,EA/w_pc,'k',lw =0.75)
+    ax.plot(k,EP,'k',lw =0.75)
     
-    plt.xlim(x_min,x_max)
-    plt.ylim(y_min,y_max)
+    plt.xlim(0,0.75)
+    plt.ylim(0,5.0)
+    
+    #plt.xlim(x_min, x_max)
+    #plt.ylim(y_min, y_max)
     
     plt.show()
     
