@@ -40,7 +40,7 @@ def PIC1():
             3. first order for particles and zeor'th order for forces,
                energy-conserving
     '''
-    NT = 150000 #Time steps
+    NT = 15000 #Time steps
     
     Th_Tc = 100 #ratio of hot to cold electron temps
     Th_Tb = 100 #ratio of hot to beam electron temps
@@ -53,7 +53,7 @@ def PIC1():
     k_B = 1.0
     E0 = 1.0 #vaccuum permititvity
     
-    N_c = int(1*10**3) #Number of cold electrons
+    N_c = int(1*10**5) #Number of cold electrons
     N_h = N_c #Number of hot electrons 
     N_b = int(nb_nc*N_c) #Number of beam electrons
     
@@ -67,7 +67,7 @@ def PIC1():
     
     ud = ud_vC*vC
 
-    n_c0 = (N_c*e)**2 / (1024**2 * E0 * k_B * TC) 
+    n_c0 = (N_c*e)**2 / (1024**2 * E0 * k_B * TC)
     
     lamD = np.sqrt(E0*k_B*TC/(n_c0*e**2))
     
@@ -77,7 +77,7 @@ def PIC1():
     lam_C =  np.sqrt(E0*k_B*TC/(n_c*e**2))
     
     n_h = N_h / L
-    lam_H =  np.sqrt(E0*k_B*TC/(n_h*e**2))
+    lam_H =  np.sqrt(E0*k_B*TH/(n_h*e**2))
     
     
     n_0 = (N_c+N_h+N_b) / L
@@ -126,32 +126,32 @@ def PIC1():
             plt.scatter(x[0:N_c]/lamD,v[0:N_c],s= 0.01,color ='k')
             plt.xlabel(r"$x$")
             plt.ylabel(r"$v_x$")
-            plt.title(str(i))
+            plt.savefig('Graphs\Run 1\Cold\step'+str(i), dpi = 400)
             plt.show()
             plt.scatter(x[N_c:N_c+N_h]/lamD,v[N_c:N_c+N_h],s= 0.01,color = 'r')
-            plt.title(str(i))
             plt.xlabel(r"$x$")
             plt.ylabel(r"$v_x$")
+            plt.savefig('Graphs\Run 1\Hot\step'+str(i), dpi = 400)
             plt.show()
-            plt.scatter(x[N_c+N_h:]/lamD,v[N_c+N_h:],s= 0.01,color = 'b')
-            plt.title(str(i))
+            plt.scatter(x[N_c+N_h:]/lamD,v[N_c+N_h:],s= 0.05,color = 'b')
             plt.xlabel(r"$x$")
             plt.ylabel(r"$v_x$")
+            plt.savefig('Graphs\Run 1\Beam\step'+str(i), dpi = 400)
             plt.show()
             plt.plot(E_grid*np.abs(e/(m_e*w_pe*vC)),color = 'k')
-            plt.title(str(i))
             plt.xlabel(r"$x$")
             plt.ylabel(r"$E_x$")
+            plt.savefig('Graphs\Run 1\E-Field\step'+str(i), dpi = 400)
             plt.show()
             plt.plot(time,-1*P_E*e/(k_B*TC*E0),color = 'k')
             plt.xlabel(r"$\omega_{pe}t$")
             plt.ylabel(r"Electrostatic Energy")
-            plt.title(str(i))
+            plt.savefig('Graphs\Run 1\Potential\step'+str(i), dpi = 400)
             plt.show()
             plt.plot(time,K_E,color = 'k')
             plt.xlabel(r"$\omega_{pe}t$")
             plt.ylabel(r"Kinetic Energy")
-            plt.title(str(i))
+            plt.savefig('Graphs\Run 1\Kinetic\step'+str(i), dpi = 400)
             plt.show()
             
         if i%1 ==0:
@@ -168,15 +168,21 @@ def PIC1():
                 dispersion_relation_graph(E_hist=E_hist, lamD=lamD, w_pe=w_pe,
                                       dt=dt,ud=ud_vC,w_pc=w_pc,
                                       w_ph=w_ph,lam_H=lam_H,lam_C=lam_C)
+                plt.savefig('Graphs\Run 1\Dispersion\step'+str(i), dpi = 400)
+                plt.show()
                 
             if i%100 ==0 and i != 0 and i>1000:
                 
                 fig,ax=plt.subplots()
                 pos=ax.imshow(E_hist[:,:k],cmap = 'jet')
                 cbar=fig.colorbar(pos,ax=ax)
+                plt.title("Step #" +str(i))
+                plt.xlabel("Time")
+                plt.ylabel("Space")
                 plt.show()
         
-            
+        print(i)
+        
     dispersion_relation_graph(E_hist = E_hist, lamD=lamD, w_pe=w_pe,
                               NG=NG,  dt= 0.01*w_pe)
     plt.plot(P_E)
@@ -190,20 +196,19 @@ def dispersion_relation_graph(E_hist, lamD,w_pe,dt,ud,w_pc,w_ph,lam_H,lam_C):
     
     NG,NT = E_hist.shape
     
+    lamD = lamD
+    w_pe = w_pe
+        
     k = 2*np.pi*np.fft.rfftfreq(NG,lamD) /lamD
-    Dk = k[-1]-k[0]
     
     w = np.pi*np.fft.rfftfreq(NT,dt)*w_pe
-    Dw = w[-1]-w[0]
-    
-    grid_kt = np.fft.rfft(E_hist,axis = 0,norm= 'forward')
     
     grid_wk = np.fft.rfft2(E_hist,norm = 'forward')
     grid_wk = np.abs(grid_wk)
     
     
     
-    grid_wk = grid_wk[:len(k),:]
+    grid_wk = grid_wk[:len(k),:] #fft repeats
     
     grid_wk=grid_wk.T # So that the horizontal axis is k and the vertical axis is omega
     grid_wk=grid_wk[::-1,:] # So that (k = 0, omega = 0) is at bottom left corner
@@ -213,10 +218,8 @@ def dispersion_relation_graph(E_hist, lamD,w_pe,dt,ud,w_pc,w_ph,lam_H,lam_C):
     
     M = np.max(grid_wk)
     
-    m = int(round(len(k)*0.15))
-    
     fig,ax=plt.subplots()
-    pos=ax.imshow(grid_wk/M,extent=(k[0],k[-1],w[0],w[-1]),
+    pos=ax.imshow(grid_wk/M,extent=(k[0]/10000,k[-1]/10000,w[0]/10000,w[-1]/10000),
                   aspect='auto', cmap='jet')
     cbar=fig.colorbar(pos,ax=ax)
     
@@ -224,29 +227,21 @@ def dispersion_relation_graph(E_hist, lamD,w_pe,dt,ud,w_pc,w_ph,lam_H,lam_C):
     y_min, y_max = ax.get_ylim()
     
     #theoretical dispersion relations
-    k = k*lamD
+    k = np.linspace(k[0],k[-1],100000)/100
     BD = ud * k #beam-driven
     EA = np.sqrt(w_pc**2*(1+3*(k*lam_C)**2)/(1+(k*lam_H)**-2)) #electron acoustic
     EP = np.sqrt(w_pc**2*(1+3*(k*lam_C)**2)+w_ph**2*(1+3*(k*lam_H)**2)) #electron plasma
     
-    ax.plot(k,BD,'k',lw =0.75)
-    ax.plot(k,EA/w_pc,'k',lw =0.75)
-    ax.plot(k,EP,'k',lw =0.75)
+    ax.plot(k/100,BD/w_pe,'k',lw =0.75)
+    ax.plot(k/100,EA/w_pe,'k',lw =0.75)
+    ax.plot(k/100,EP/w_pe,'k',lw =0.75)
     
-    plt.xlim(0,0.75)
-    plt.ylim(0,5.0)
+    plt.xlim(0,.4)
+    plt.ylim(0,3)
     
-    #plt.xlim(x_min, x_max)
-    #plt.ylim(y_min, y_max)
+    plt.xlabel(r"$k\lambda_D$")
+    plt.ylabel(r"$\omega \setminus \omega_{pe}$")
     
-    plt.show()
-    
-    #fig,ax=plt.subplots()
-    
-    #pos=ax.imshow(grid_wk,extent=(k[1],k[-2],w[0],w[-1]),aspect='auto')
-    #cbar=fig.colorbar(pos,ax=ax)
-    
-    #plt.show()
 
     
     
