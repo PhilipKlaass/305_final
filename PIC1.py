@@ -44,7 +44,7 @@ def PIC1():
     
     Th_Tc = 100 #ratio of hot to cold electron temps
     Th_Tb = 100 #ratio of hot to beam electron temps
-    nb_nc = 0.04 #ratio of beam to cold electron densities
+    nb_nc = 0.1 #ratio of beam to cold electron densities
     ud_vC = 20.0 #ratio of streaming speed to cold thermal speed
     
     #Constants
@@ -126,32 +126,32 @@ def PIC1():
             plt.scatter(x[0:N_c]/lamD,v[0:N_c],s= 0.01,color ='k')
             plt.xlabel(r"$x$")
             plt.ylabel(r"$v_x$")
-            plt.savefig('Graphs\Run 1\Cold\step'+str(i), dpi = 400)
+            plt.savefig('Graphs\Run 7\Cold\step'+str(i), dpi = 400)
             plt.show()
             plt.scatter(x[N_c:N_c+N_h]/lamD,v[N_c:N_c+N_h],s= 0.01,color = 'r')
             plt.xlabel(r"$x$")
             plt.ylabel(r"$v_x$")
-            plt.savefig('Graphs\Run 1\Hot\step'+str(i), dpi = 400)
+            plt.savefig('Graphs\Run 7\Hot\step'+str(i), dpi = 400)
             plt.show()
             plt.scatter(x[N_c+N_h:]/lamD,v[N_c+N_h:],s= 0.05,color = 'b')
             plt.xlabel(r"$x$")
             plt.ylabel(r"$v_x$")
-            plt.savefig('Graphs\Run 1\Beam\step'+str(i), dpi = 400)
+            plt.savefig('Graphs\Run 7\Beam\step'+str(i), dpi = 400)
             plt.show()
             plt.plot(E_grid*np.abs(e/(m_e*w_pe*vC)),color = 'k')
             plt.xlabel(r"$x$")
             plt.ylabel(r"$E_x$")
-            plt.savefig('Graphs\Run 1\E-Field\step'+str(i), dpi = 400)
+            plt.savefig('Graphs\Run 7\E-Field\step'+str(i), dpi = 400)
             plt.show()
             plt.plot(time,-1*P_E*e/(k_B*TC*E0),color = 'k')
             plt.xlabel(r"$\omega_{pe}t$")
             plt.ylabel(r"Electrostatic Energy")
-            plt.savefig('Graphs\Run 1\Potential\step'+str(i), dpi = 400)
+            plt.savefig('Graphs\Run 7\Potential\step'+str(i), dpi = 400)
             plt.show()
             plt.plot(time,K_E,color = 'k')
             plt.xlabel(r"$\omega_{pe}t$")
             plt.ylabel(r"Kinetic Energy")
-            plt.savefig('Graphs\Run 1\Kinetic\step'+str(i), dpi = 400)
+            plt.savefig('Graphs\Run 7\Kinetic\step'+str(i), dpi = 400)
             plt.show()
             
         if i%1 ==0:
@@ -161,14 +161,14 @@ def PIC1():
                 
             else:
                 
-                E_hist = np.roll(E_hist,1,axis = 0)
+                E_hist = np.roll(E_hist,-1,axis = 1)
                 E_hist[:,-1] = E_grid
         
             if i%100 ==0 and i != 0 and i>1000:
                 dispersion_relation_graph(E_hist=E_hist, lamD=lamD, w_pe=w_pe,
                                       dt=dt,ud=ud_vC,w_pc=w_pc,
                                       w_ph=w_ph,lam_H=lam_H,lam_C=lam_C)
-                plt.savefig('Graphs\Run 1\Dispersion\step'+str(i), dpi = 400)
+                plt.savefig('Graphs\Run 7\Dispersion\step'+str(i), dpi = 400)
                 plt.show()
                 
             if i%100 ==0 and i != 0 and i>1000:
@@ -179,6 +179,7 @@ def PIC1():
                 plt.title("Step #" +str(i))
                 plt.xlabel("Time")
                 plt.ylabel("Space")
+                plt.savefig('Graphs\Run 7\E-Hist\step'+str(i), dpi = 400)
                 plt.show()
         
         print(i)
